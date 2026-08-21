@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Users, DollarSign, Cpu, Package, ArrowLeft } from 'lucide-react'
+import { AdminUserActions } from './AdminUserActions'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -160,12 +161,13 @@ export default async function AdminDashboard() {
                 <TableHead className="font-semibold">Orders</TableHead>
                 <TableHead className="font-semibold">Tokens Used</TableHead>
                 <TableHead className="font-semibold text-right">AI Cost ($)</TableHead>
+                <TableHead className="font-semibold text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {userStats.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500 py-8">
+                  <TableCell colSpan={7} className="text-center text-slate-500 py-8">
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -187,6 +189,13 @@ export default async function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-right font-medium text-indigo-600 font-mono">
                       ${u.aiCost.toFixed(4)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {u.id === user.id ? (
+                        <span className="text-sm text-slate-500">Current account</span>
+                      ) : (
+                        <AdminUserActions userId={u.id} email={u.email} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
