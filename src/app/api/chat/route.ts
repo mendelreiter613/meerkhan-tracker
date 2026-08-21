@@ -1,5 +1,5 @@
 import { google } from '@ai-sdk/google'
-import { streamText, tool, convertToCoreMessages } from 'ai'
+import { streamText, tool, convertToModelMessages, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
 
@@ -47,36 +47,10 @@ Current date: ${new Date().toLocaleDateString()}
 Always be concise, helpful, and friendly.`
 
   try {
-    const result = await streamText({
-      model: google('gemini-3.6-flash'),
-      system: systemPrompt,
-      messages: convertToCoreMessages(messages),
-      maxSteps: 5,
-      onFinish: async (event) => {
-        try {
-          // Calculate token usage and cost
-          const promptTokens = event.usage?.promptTokens || 0
-          const completionTokens = event.usage?.completionTokens || 0
-          const totalTokens = promptTokens + completionTokens
-          
-          // Rough estimate for gemini (example pricing: $1.25/1M input, $5.00/1M output)
-          const cost = (promptTokens * 1.25 + completionTokens * 5.0) / 1000000
-
-          if (totalTokens > 0) {
-            await supabase.from('ai_usage').insert({
-              user_id: userId,
-              tokens_used: totalTokens,
-              estimated_cost: cost
-            })
-          }
-        } catch (err) {
-          console.error('Failed to record AI usage:', err)
-        }
-      },
-    tools: {
+    const tools = {
       getOrders: tool({
         description: 'Get a list of the users orders, optionally filtered by status.',
-        parameters: z.object({
+        inputSchema: z.object({
           status: z.enum(['ordered', 'review_submitted', 'review_live', 'refund_requested', 'refunded']).optional()
         }),
         execute: async ({ status }) => {
@@ -88,7 +62,7 @@ Always be concise, helpful, and friendly.`
       }),
       updateOrder: tool({
         description: 'Update an existing order (status, or refund amount).',
-        parameters: z.object({
+        inputSchema: z.object({
           orderId: z.string(),
           status: z.enum(['ordered', 'review_submitted', 'review_live', 'refund_requested', 'refunded']).optional(),
           amountRefunded: z.number().nonnegative().optional()
@@ -125,7 +99,7 @@ Always be concise, helpful, and friendly.`
       }),
       findMatchingOrdersForRefund: tool({
         description: 'Search non-refunded orders to find potential matches for a refund amount.',
-        parameters: z.object({
+        inputSchema: z.object({
           refundAmount: z.number().describe('The refund amount received by the user'),
           itemNameSnippet: z.string().optional().describe('Optional product keyword if mentioned')
         }),
@@ -169,7 +143,7 @@ Always be concise, helpful, and friendly.`
       }),
       getAgents: tool({
         description: 'Get a list of the users agents/sellers.',
-        parameters: z.object({}),
+        inputSchema: z.object({}),
         execute: async () => {
           const { data } = await supabase.from('agents').select('id, name').eq('user_id', userId)
           return data
@@ -177,7 +151,7 @@ Always be concise, helpful, and friendly.`
       }),
       addAgent: tool({
         description: 'Create a new agent/seller.',
-        parameters: z.object({
+        inputSchema: z.object({
           name: z.string().min(1),
           contactInfo: z.string().optional()
         }),
@@ -189,7 +163,7 @@ Always be concise, helpful, and friendly.`
       }),
       addOrder: tool({
         description: 'Add a new order.',
-        parameters: z.object({
+        inputSchema: z.object({
           itemName: z.string().min(1),
           amountSpent: z.number().nonnegative(),
           orderNumber: z.string().optional(),
@@ -218,9 +192,37 @@ Always be concise, helpful, and friendly.`
         }
       })
     }
-  })
 
-  return result.toDataStreamResponse()
+    const result = streamText({
+      model: google('gemini-3.6-flash'),
+      system: systemPrompt,
+      messages: await convertToModelMessages(messages, { tools }),
+      stopWhen: stepCountIs(5),
+      tools,
+      onFinish: async (event) => {
+        try {
+          // Calculate token usage and cost
+          const inputTokens = event.usage?.inputTokens || 0
+          const outputTokens = event.usage?.outputTokens || 0
+          const totalTokens = inputTokens + outputTokens
+
+          // Rough estimate for gemini (example pricing: $1.25/1M input, $5.00/1M output)
+          const cost = (inputTokens * 1.25 + outputTokens * 5.0) / 1000000
+
+          if (totalTokens > 0) {
+            await supabase.from('ai_usage').insert({
+              user_id: userId,
+              tokens_used: totalTokens,
+              estimated_cost: cost
+            })
+          }
+        } catch (err) {
+          console.error('Failed to record AI usage:', err)
+        }
+      },
+    })
+
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error('Chat API Error:', error)
     const message = error instanceof Error ? error.message : 'Internal Server Error'

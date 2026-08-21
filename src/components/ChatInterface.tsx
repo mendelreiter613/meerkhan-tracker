@@ -1,6 +1,7 @@
 'use client'
 
-import { useChat } from 'ai/react'
+import { useChat } from '@ai-sdk/react'
+import type { FileUIPart } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,11 +12,13 @@ import { useRouter } from 'next/navigation'
 
 export function ChatInterface() {
   const router = useRouter()
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
+  const { messages, status, error, sendMessage } = useChat({
     onFinish: () => {
       router.refresh()
     }
   })
+  const isLoading = status === 'submitted' || status === 'streaming'
+  const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<FileList | null>(null)
@@ -75,22 +78,23 @@ export function ChatInterface() {
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    
-    let attachments: { name: string; contentType: string; url: string }[] | undefined = undefined
+    if (!input && (!files || files.length === 0)) return
+
+    let attachments: FileUIPart[] | undefined = undefined
 
     if (files && files.length > 0) {
       attachments = await Promise.all(
         Array.from(files).map(async (file) => ({
-          name: file.name,
-          contentType: 'image/jpeg',
+          type: 'file' as const,
+          filename: file.name,
+          mediaType: 'image/jpeg',
           url: await compressImageFile(file),
         }))
       )
     }
 
-    handleSubmit(e, {
-      experimental_attachments: attachments,
-    })
+    sendMessage({ text: input, files: attachments })
+    setInput('')
     setFiles(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -120,34 +124,46 @@ export function ChatInterface() {
                     : 'bg-muted'
                 }`}
               >
-                {m.content}
-                
-                {/* Render any attachments the user sent */}
-                {m.experimental_attachments?.map((attachment, index) => (
-                  <div key={index} className="mt-2 flex gap-2 overflow-x-auto">
-                    {attachment.contentType?.startsWith('image/') ? (
-                      <img 
-                        src={attachment.url} 
-                        alt="attachment" 
-                        className="h-24 w-auto rounded border shadow-sm"
-                      />
-                    ) : (
-                      <div className="text-xs italic bg-white/20 p-2 rounded">
-                        Attached file
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {m.parts.map((part, index) => {
+                  if (part.type === 'text') {
+                    return <span key={index}>{part.text}</span>
+                  }
 
-                {m.toolInvocations?.map((tool) => (
-                  <div key={tool.toolCallId} className="text-xs bg-black/10 dark:bg-white/10 rounded p-1 mt-1 font-mono">
-                    {tool.state === 'result' ? (
-                      <span className="text-green-600 dark:text-green-400">✓ Completed action: {tool.toolName}</span>
-                    ) : (
-                      <span className="text-yellow-600 dark:text-yellow-400">Working on: {tool.toolName}...</span>
-                    )}
-                  </div>
-                ))}
+                  if (part.type === 'file') {
+                    return (
+                      <div key={index} className="mt-2 flex gap-2 overflow-x-auto">
+                        {part.mediaType?.startsWith('image/') ? (
+                          <img
+                            src={part.url}
+                            alt="attachment"
+                            className="h-24 w-auto rounded border shadow-sm"
+                          />
+                        ) : (
+                          <div className="text-xs italic bg-white/20 p-2 rounded">
+                            Attached file
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  if ('state' in part) {
+                    const toolName = part.type === 'dynamic-tool' ? part.toolName : part.type.slice(5)
+                    return (
+                      <div key={index} className="text-xs bg-black/10 dark:bg-white/10 rounded p-1 mt-1 font-mono">
+                        {part.state === 'output-available' ? (
+                          <span className="text-green-600 dark:text-green-400">✓ Completed action: {toolName}</span>
+                        ) : part.state === 'output-error' ? (
+                          <span className="text-red-600 dark:text-red-400">✗ Action failed: {toolName}</span>
+                        ) : (
+                          <span className="text-yellow-600 dark:text-yellow-400">Working on: {toolName}...</span>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  return null
+                })}
               </div>
             ))}
             {isLoading && (
@@ -205,7 +221,7 @@ export function ChatInterface() {
           </Button>
           <Input
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
               if (e.clipboardData.files && e.clipboardData.files.length > 0) {
                 const pastedFiles = e.clipboardData.files;
