@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Agent, Order, OrderStatus } from '@/types/database'
 import { addAgent, addOrder, updateOrderStatus, logout } from './actions'
 import { Button } from '@/components/ui/button'
@@ -133,7 +134,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
         <div className="flex items-center gap-4">
           <span className="text-sm font-medium text-slate-500 hidden sm:inline-block">{userEmail}</span>
           {isAdmin && (
-            <Button variant="outline" size="sm" render={<a href="/admin" />} className="gap-2">
+            <Button variant="outline" size="sm" render={<Link href="/admin" />} className="gap-2">
               <ShieldAlert className="h-4 w-4" />
               <span className="hidden sm:inline">Admin Panel</span>
             </Button>

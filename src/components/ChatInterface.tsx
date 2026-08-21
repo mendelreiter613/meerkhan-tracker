@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Send, Paperclip, X } from 'lucide-react'
+import { Send, Paperclip, X, AlertCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export function ChatInterface() {
   const router = useRouter()
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
     onFinish: () => {
       router.refresh()
     }
@@ -24,12 +24,50 @@ export function ChatInterface() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, error])
 
-  const fileToDataUrl = (file: File): Promise<string> => {
+  // Canvas client-side compression to prevent exceeding 4MB Vercel payload limits
+  const compressImageFile = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+        return
+      }
+
+      const img = new Image()
+      img.onload = () => {
+        let width = img.width
+        let height = img.height
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height)
+          height = maxHeight
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(img.src)
+          return
+        }
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+
       const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
+      reader.onload = (e) => {
+        img.src = e.target?.result as string
+      }
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
@@ -44,8 +82,8 @@ export function ChatInterface() {
       attachments = await Promise.all(
         Array.from(files).map(async (file) => ({
           name: file.name,
-          contentType: file.type,
-          url: await fileToDataUrl(file),
+          contentType: 'image/jpeg',
+          url: await compressImageFile(file),
         }))
       )
     }
@@ -114,6 +152,12 @@ export function ChatInterface() {
             ))}
             {isLoading && (
               <div className="bg-muted w-max rounded-lg px-3 py-2 text-sm">Thinking...</div>
+            )}
+            {error && (
+              <div className="flex items-center gap-2 bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-200 my-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                <span>{error.message || 'An error occurred while talking to the AI. Please try again.'}</span>
+              </div>
             )}
           </div>
         </ScrollArea>
