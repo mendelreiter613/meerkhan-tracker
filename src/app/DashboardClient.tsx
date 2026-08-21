@@ -164,7 +164,10 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{userEmail}</span>
           <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange}>
-            <SelectTrigger className="w-9 sm:w-[190px] px-0 sm:px-2.5 justify-center sm:justify-between h-9 text-xs bg-card gap-1.5">
+            <SelectTrigger
+              className="w-7 h-7 sm:w-[190px] sm:h-9 px-0 sm:px-2.5 justify-center sm:justify-between text-xs bg-card gap-1.5 rounded-[min(var(--radius-md),12px)] sm:rounded-lg"
+              chevronClassName="hidden sm:block"
+            >
               <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <SelectValue className="hidden sm:flex" />
             </SelectTrigger>
