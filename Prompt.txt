@@ -1,0 +1,15 @@
+i want to build a system that can track my amazon orders.
+there is a few difrint sellers / agents that tell me items to buy, then i buy it i submit a review after a few days once the review posts on amazon, i send a screenshot to the agent that sent me the item then a few days later he sends me a refund.
+now i need a easy way to track all these orders and the status of it, ordered, review submitted, review sent in and refunded. and which agent i got it from.
+i used to have a google sheet that i would do it in but i want to be more advanced, something a little more automated, maybe send me reminders, im thinking of a built in ai bot that knows nd can read and write to the system that i can tell it, i just submitted a review for item x or even upload a screen shot to it and say i just ordered this from agent x.
+as well as any other ideas you have to make this system esier and better and more automated.
+as well as the way i get refunded is they send me a paypal but lots of times the paypal is not the exact amount as what i spent so i want to be able to tell the ai bot "i got refunded x amount and it will have to figure out which item its for if it doesn't know it should ask me.
+of course i should be able to change and edit everything manuly...
+now there is a few of my friends that do this as well so i would like to make this system in a way that you can sign up and make an account and have your data on your account.
+i should have a admin account that i can control all the accounts.
+if there is any services that cost money like api or stuff i have to be able to track how much each account is spending so i can bill them, and even better if it can generate a invoice at the end of each month.
+im not sure if a website is the best way to go about it, im open for any idea but if some sort of website is the way to go i have a domain reiterairlins.com that i bought from cloudfare so i would like for this to be meerkhan.reiterairlines.com
+as well as i have a few projects beong deployed on vercel if we need somewhere to deploy it.
+not saying we have to do it that way just telling you what i have.
+i want the agent to build this as much as possible, i dont want to have to make superbases get you api keys etc unless there is no there way, use extenchins to do all the work like connect to superbase, github, vercel etc.
+or if you need me to install any lmk
