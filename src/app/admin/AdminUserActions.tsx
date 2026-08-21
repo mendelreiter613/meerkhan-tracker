@@ -12,7 +12,9 @@ interface AdminUserActionsProps {
 export function AdminUserActions({ userId, email }: AdminUserActionsProps) {
   return (
     <form
-      action={deleteUser}
+      action={async (formData) => {
+        await deleteUser(formData)
+      }}
       onSubmit={(event) => {
         if (!window.confirm(`Delete ${email}? This permanently removes the user and all of their data.`)) {
           event.preventDefault()
