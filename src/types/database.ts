@@ -8,6 +8,15 @@ export interface Agent {
   created_at: string;
 }
 
+export interface OrderEvent {
+  id: string;
+  order_id: string;
+  user_id: string;
+  event_type: string;
+  description: string;
+  created_at: string;
+}
+
 export interface Order {
   id: string;
   user_id: string;
@@ -22,6 +31,7 @@ export interface Order {
   created_at: string;
   updated_at: string;
   agents?: Agent | null; // Joined table
+  order_events?: OrderEvent[]; // Timeline history
 }
 
 export interface Profile {

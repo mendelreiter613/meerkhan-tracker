@@ -20,9 +20,9 @@ export async function POST(req: Request) {
   const systemPrompt = `You are Meerkhan, an AI assistant for managing Amazon orders, reviews, and refunds.
 You help the user track what they bought, when they submitted a review, when it went live, and when they got refunded.
 You have access to their database via tools. 
-When the user says "I got refunded X", use the tools to check their orders. If there's an obvious order matching that amount, ask for confirmation or just update it. If not, ask them which order it was.
-If the user says "I ordered X from agent Y", check if agent Y exists. If not, create the agent, then create the order.
-The user might upload screenshots of their orders or refund confirmations. You can read the images to find out the item name, order number, amount spent, or refunded amount. Extract this information and use it to add or update orders. If any information is missing, ask the user.
+When the user says "I got refunded X" or uploads a PayPal/refund screenshot, use the \`findMatchingOrdersForRefund\` tool to find candidate orders. Compare the refund amount with open or pending orders, suggest the best match to the user, and ask for confirmation before applying the refund (or apply if explicit).
+If the user says "I ordered X from agent Y", check if agent Y exists using \`getAgents\`. If not, create the agent with \`addAgent\`, then create the order with \`addOrder\`.
+The user might upload screenshots of their orders or refund confirmations. Extract item name, order number, amount spent, or refunded amount, and use tools to manage their records.
 
 Current date: ${new Date().toLocaleDateString()}
 Always be concise, helpful, and friendly.`
@@ -75,13 +75,75 @@ Always be concise, helpful, and friendly.`
           amountRefunded: z.number().optional()
         }),
         execute: async ({ orderId, status, amountRefunded }) => {
-          const updates: any = {}
+          const updates: any = { updated_at: new Date().toISOString() }
           if (status) updates.status = status
           if (amountRefunded !== undefined) updates.amount_refunded = amountRefunded
           
           const { data, error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('user_id', userId).select()
           if (error) return { error: error.message }
+
+          if (status) {
+            await supabase.from('order_events').insert({
+              order_id: orderId,
+              user_id: userId,
+              event_type: 'status_changed',
+              description: `AI updated status to ${status.replace('_', ' ').toUpperCase()}`
+            })
+          }
+          if (amountRefunded !== undefined) {
+            await supabase.from('order_events').insert({
+              order_id: orderId,
+              user_id: userId,
+              event_type: 'refund_updated',
+              description: `AI recorded refund of $${amountRefunded.toFixed(2)}`
+            })
+          }
+
           return { success: true, updatedOrder: data }
+        }
+      }),
+      findMatchingOrdersForRefund: tool({
+        description: 'Search non-refunded orders to find potential matches for a refund amount.',
+        parameters: z.object({
+          refundAmount: z.number().describe('The refund amount received by the user'),
+          itemNameSnippet: z.string().optional().describe('Optional product keyword if mentioned')
+        }),
+        execute: async ({ refundAmount, itemNameSnippet }) => {
+          let query = supabase
+            .from('orders')
+            .select('id, item_name, order_number, amount_spent, amount_refunded, status, created_at, agents(name)')
+            .eq('user_id', userId)
+            .neq('status', 'refunded')
+
+          const { data, error } = await query
+          if (error) return { error: error.message }
+          if (!data || data.length === 0) return { matches: [], message: 'No pending non-refunded orders found.' }
+
+          // Score and rank candidate orders
+          const ranked = data.map((order: any) => {
+            const spent = Number(order.amount_spent || 0)
+            const diff = Math.abs(spent - refundAmount)
+            let score = 100 - diff * 5 // higher score for closer amount match
+
+            if (itemNameSnippet && order.item_name.toLowerCase().includes(itemNameSnippet.toLowerCase())) {
+              score += 50
+            }
+
+            return {
+              orderId: order.id,
+              itemName: order.item_name,
+              orderNumber: order.order_number,
+              amountSpent: spent,
+              agentName: order.agents?.name || 'No Agent',
+              currentStatus: order.status,
+              amountDifference: diff,
+              matchScore: Math.max(0, Math.round(score))
+            }
+          })
+
+          ranked.sort((a: any, b: any) => b.matchScore - a.matchScore)
+
+          return { matches: ranked.slice(0, 3) }
         }
       }),
       getAgents: tool({
@@ -121,6 +183,16 @@ Always be concise, helpful, and friendly.`
             agent_id: agentId || null
           }).select()
           if (error) return { error: error.message }
+
+          if (data?.[0]?.id) {
+            await supabase.from('order_events').insert({
+              order_id: data[0].id,
+              user_id: userId,
+              event_type: 'created',
+              description: `AI created order for "${itemName}" ($${amountSpent.toFixed(2)})`
+            })
+          }
+
           return { success: true, order: data?.[0] }
         }
       })

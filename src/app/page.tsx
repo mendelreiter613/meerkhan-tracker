@@ -20,12 +20,13 @@ export default async function Home() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Fetch orders with agent details
+  // Fetch orders with agent details and timeline events
   const { data: ordersData } = await supabase
     .from('orders')
     .select(`
       *,
-      agents (*)
+      agents (*),
+      order_events (*)
     `)
     .order('created_at', { ascending: false })
 
