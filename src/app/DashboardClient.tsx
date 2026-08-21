@@ -141,7 +141,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
           )}
           <Separator orientation="vertical" className="h-6" />
           <form action={logout}>
-            <Button variant="ghost" size="sm" className="gap-2 text-slate-600 hover:text-slate-900">
+            <Button type="submit" variant="ghost" size="sm" className="gap-2 text-slate-600 hover:text-slate-900">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>
             </Button>
