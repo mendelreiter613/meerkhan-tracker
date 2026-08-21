@@ -20,18 +20,39 @@ export default async function Home() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Fetch orders with agent details and timeline events
-  const { data: ordersData } = await supabase
+  // Keep the main order query independent of the optional timeline table.
+  const { data: ordersData, error: ordersError } = await supabase
     .from('orders')
     .select(`
       *,
-      agents (*),
-      order_events (*)
+      agents (*)
     `)
     .order('created_at', { ascending: false })
 
+  if (ordersError) {
+    console.error('Failed to load orders:', ordersError)
+  }
+
   const agents = (agentsData || []) as Agent[]
-  const orders = (ordersData || []) as Order[]
+  let orders = (ordersData || []) as Order[]
+
+  // Load timeline events separately so a missing migration cannot hide orders.
+  if (orders.length > 0) {
+    const { data: eventsData, error: eventsError } = await supabase
+      .from('order_events')
+      .select('*')
+      .in('order_id', orders.map((order) => order.id))
+      .order('created_at', { ascending: false })
+
+    if (eventsError) {
+      console.error('Failed to load order timeline events:', eventsError)
+    } else {
+      orders = orders.map((order) => ({
+        ...order,
+        order_events: (eventsData || []).filter((event) => event.order_id === order.id),
+      }))
+    }
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
