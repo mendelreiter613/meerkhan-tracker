@@ -34,22 +34,26 @@ Always be concise, helpful, and friendly.`
       messages: convertToCoreMessages(messages),
       maxSteps: 5,
       onFinish: async (event) => {
-      // Calculate token usage and cost
-      const promptTokens = event.usage?.promptTokens || 0
-      const completionTokens = event.usage?.completionTokens || 0
-      const totalTokens = promptTokens + completionTokens
-      
-      // Rough estimate for gemini-1.5-pro (example pricing: $1.25/1M input, $5.00/1M output)
-      const cost = (promptTokens * 1.25 + completionTokens * 5.0) / 1000000
+        try {
+          // Calculate token usage and cost
+          const promptTokens = event.usage?.promptTokens || 0
+          const completionTokens = event.usage?.completionTokens || 0
+          const totalTokens = promptTokens + completionTokens
+          
+          // Rough estimate for gemini (example pricing: $1.25/1M input, $5.00/1M output)
+          const cost = (promptTokens * 1.25 + completionTokens * 5.0) / 1000000
 
-      if (totalTokens > 0) {
-        await supabase.from('ai_usage').insert({
-          user_id: userId,
-          tokens_used: totalTokens,
-          estimated_cost: cost
-        })
-      }
-    },
+          if (totalTokens > 0) {
+            await supabase.from('ai_usage').insert({
+              user_id: userId,
+              tokens_used: totalTokens,
+              estimated_cost: cost
+            })
+          }
+        } catch (err) {
+          console.error('Failed to record AI usage:', err)
+        }
+      },
     tools: {
       getOrders: tool({
         description: 'Get a list of the users orders, optionally filtered by status.',
@@ -57,7 +61,7 @@ Always be concise, helpful, and friendly.`
           status: z.enum(['ordered', 'review_submitted', 'review_live', 'refund_requested', 'refunded']).optional()
         }),
         execute: async ({ status }) => {
-          let query = supabase.from('orders').select('id, item_name, amount_spent, amount_refunded, status, agent_id').eq('user_id', userId)
+          let query = supabase.from('orders').select('id, item_name, order_number, amount_spent, amount_refunded, status, agent_id').eq('user_id', userId)
           if (status) query = query.eq('status', status)
           const { data } = await query
           return data
@@ -91,10 +95,11 @@ Always be concise, helpful, and friendly.`
       addAgent: tool({
         description: 'Create a new agent/seller.',
         parameters: z.object({
-          name: z.string()
+          name: z.string(),
+          contactInfo: z.string().optional()
         }),
-        execute: async ({ name }) => {
-          const { data, error } = await supabase.from('agents').insert({ user_id: userId, name }).select()
+        execute: async ({ name, contactInfo }) => {
+          const { data, error } = await supabase.from('agents').insert({ user_id: userId, name, contact_info: contactInfo || null }).select()
           if (error) return { error: error.message }
           return { success: true, agent: data?.[0] }
         }
@@ -104,13 +109,15 @@ Always be concise, helpful, and friendly.`
         parameters: z.object({
           itemName: z.string(),
           amountSpent: z.number(),
+          orderNumber: z.string().optional(),
           agentId: z.string().optional()
         }),
-        execute: async ({ itemName, amountSpent, agentId }) => {
+        execute: async ({ itemName, amountSpent, orderNumber, agentId }) => {
           const { data, error } = await supabase.from('orders').insert({
             user_id: userId,
             item_name: itemName,
             amount_spent: amountSpent,
+            order_number: orderNumber || null,
             agent_id: agentId || null
           }).select()
           if (error) return { error: error.message }
