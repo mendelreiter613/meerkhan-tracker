@@ -19,22 +19,31 @@ export async function POST(req: Request) {
 
   const userId = user.id
 
-  // Basic per-user daily spend guardrail so the chat can't run up an unbounded API bill.
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
-  const { data: todayUsage } = await supabase
-    .from('ai_usage')
-    .select('estimated_cost')
-    .eq('user_id', userId)
-    .gte('created_at', startOfDay.toISOString())
+  // Per-user daily spend guardrail so the chat can't run up an unbounded API bill.
+  // Checking and reserving happen atomically in one DB call (with an advisory lock
+  // keyed on the user) so two simultaneous requests can't both slip through under
+  // the cap before either one's actual cost is recorded.
+  const { data: reservationData, error: reservationError } = await supabase
+    .rpc('reserve_ai_usage', { p_daily_cap: DAILY_AI_COST_CAP_USD })
+    .single()
+  const reservation = reservationData as { allowed: boolean; spent_today: number; usage_id: string | null } | null
 
-  const spentToday = (todayUsage || []).reduce((sum, u) => sum + Number(u.estimated_cost || 0), 0)
-  if (spentToday >= DAILY_AI_COST_CAP_USD) {
+  if (reservationError || !reservation) {
+    console.error('Failed to check AI spend cap:', reservationError)
+    return new Response(
+      JSON.stringify({ error: 'Unable to verify AI usage cap right now. Please try again.' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  if (!reservation.allowed) {
     return new Response(
       JSON.stringify({ error: `Daily AI usage cap of $${DAILY_AI_COST_CAP_USD.toFixed(2)} reached. Try again tomorrow.` }),
       { status: 429, headers: { 'Content-Type': 'application/json' } }
     )
   }
+
+  const usageId = reservation.usage_id as string
 
   const systemPrompt = `You are Meerkhan, an AI assistant for managing Amazon orders, reviews, and refunds.
 You help the user track what they bought, when they submitted a review, when it went live, and when they got refunded.
@@ -209,13 +218,12 @@ Always be concise, helpful, and friendly.`
           // Rough estimate for gemini (example pricing: $1.25/1M input, $5.00/1M output)
           const cost = (inputTokens * 1.25 + outputTokens * 5.0) / 1000000
 
-          if (totalTokens > 0) {
-            await supabase.from('ai_usage').insert({
-              user_id: userId,
-              tokens_used: totalTokens,
-              estimated_cost: cost
-            })
-          }
+          const { error: finalizeError } = await supabase.rpc('finalize_ai_usage', {
+            p_usage_id: usageId,
+            p_tokens_used: totalTokens,
+            p_estimated_cost: cost
+          })
+          if (finalizeError) throw finalizeError
         } catch (err) {
           console.error('Failed to record AI usage:', err)
         }
