@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Subtle modern gradient matching your dashboard's indigo theme -->
+    <linearGradient id="mt-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#4338ca" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded background -->
+  <rect width="256" height="256" rx="60" fill="url(#mt-grad)" />
+
+  <!-- Letter 'M' -->
+  <path
+    d="M 48 168 V 88 L 88 128 L 128 88 V 168"
+    stroke="white"
+    stroke-width="24"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+
+  <!-- Letter 'T' -->
+  <path
+    d="M 168 88 H 208 M 188 88 V 168"
+    stroke="white"
+    stroke-width="24"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>
