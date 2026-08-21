@@ -153,20 +153,20 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
   return (
     <div className="flex flex-col min-h-screen bg-muted/30">
       {/* Modern sticky header */}
-      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/80 px-6 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/80 px-3 sm:px-6 backdrop-blur-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Package className="h-5 w-5" />
           </div>
-          <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">Meerkhan Tracker</h1>
+          <h1 className="font-heading text-lg sm:text-xl font-semibold tracking-tight text-foreground truncate">Meerkhan Tracker</h1>
         </div>
-        
-        <div className="flex items-center gap-4">
+
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{userEmail}</span>
           <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange}>
-            <SelectTrigger className="w-[190px] h-9 text-xs bg-card gap-1.5">
-              <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue />
+            <SelectTrigger className="w-9 sm:w-[190px] px-0 sm:px-2.5 justify-center sm:justify-between h-9 text-xs bg-card gap-1.5">
+              <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue className="hidden sm:flex" />
             </SelectTrigger>
             <SelectContent>
               {REMINDER_FREQUENCY_OPTIONS.map((option) => (
@@ -182,7 +182,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               <span className="hidden sm:inline">Admin Panel</span>
             </Button>
           )}
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-6 hidden sm:block" />
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
               <LogOut className="h-4 w-4" />
@@ -192,7 +192,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
         </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-6 space-y-6 sm:space-y-8 max-w-7xl mx-auto w-full">
         {/* KPI Summary Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card
