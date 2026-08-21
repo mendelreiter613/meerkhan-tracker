@@ -1,5 +1,5 @@
 import { google } from '@ai-sdk/google'
-import { streamText, tool } from 'ai'
+import { streamText, tool, convertToCoreMessages } from 'ai'
 import { z } from 'zod'
 import { createClient } from '@/utils/supabase/server'
 
@@ -27,11 +27,12 @@ The user might upload screenshots of their orders or refund confirmations. You c
 Current date: ${new Date().toLocaleDateString()}
 Always be concise, helpful, and friendly.`
 
-  const result = await streamText({
-    model: google('gemini-1.5-pro'),
-    system: systemPrompt,
-    messages,
-    onFinish: async (event) => {
+  try {
+    const result = await streamText({
+      model: google('gemini-1.5-pro'),
+      system: systemPrompt,
+      messages: convertToCoreMessages(messages),
+      onFinish: async (event) => {
       // Calculate token usage and cost
       const promptTokens = event.usage?.promptTokens || 0
       const completionTokens = event.usage?.completionTokens || 0
@@ -119,4 +120,8 @@ Always be concise, helpful, and friendly.`
   })
 
   return result.toDataStreamResponse()
+  } catch (error) {
+    console.error(error)
+    return new Response('Internal Server Error', { status: 500 })
+  }
 }
