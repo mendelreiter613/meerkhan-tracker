@@ -140,7 +140,16 @@ export function ChatInterface() {
           <Input
             value={input}
             onChange={handleInputChange}
-            placeholder="Type your message or attach an image..."
+            onPaste={(e) => {
+              if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+                const pastedFiles = e.clipboardData.files;
+                const hasImage = Array.from(pastedFiles).some(file => file.type.startsWith('image/'));
+                if (hasImage) {
+                  setFiles(pastedFiles);
+                }
+              }
+            }}
+            placeholder="Type your message or paste an image..."
             className="flex-1"
             disabled={isLoading}
           />
