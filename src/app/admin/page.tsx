@@ -43,10 +43,10 @@ export default async function AdminDashboard() {
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center gap-4">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
+        <h1 className="font-heading text-2xl font-semibold">Access Denied</h1>
         {noAdminsYet ? (
           <>
-            <p className="max-w-md text-slate-600">
+            <p className="max-w-md text-muted-foreground">
               No admin account exists yet. Claim the admin role for your account to set up the admin panel.
             </p>
             <form action={async () => { await bootstrapAdmin() }}>
@@ -116,11 +116,11 @@ export default async function AdminDashboard() {
   const totalGlobalTokens = userStats.reduce((sum, u) => sum + u.tokensUsed, 0)
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50/50 p-6 space-y-8 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col min-h-screen bg-muted/30 p-6 space-y-8 max-w-7xl mx-auto w-full">
       <header className="flex items-center justify-between border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin Panel</h1>
-          <p className="text-sm text-slate-500">Overview of all registered users, orders, and AI API costs.</p>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">Admin Panel</h1>
+          <p className="text-sm text-muted-foreground">Overview of all registered users, orders, and AI API costs.</p>
         </div>
         <Button variant="outline" render={<Link href="/" />} className="gap-2">
           <ArrowLeft className="h-4 w-4" /> Back to Tracker
@@ -135,7 +135,7 @@ export default async function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalUsers}</div>
+            <div className="font-heading text-2xl font-semibold">{totalUsers}</div>
           </CardContent>
         </Card>
         <Card>
@@ -144,7 +144,7 @@ export default async function AdminDashboard() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalGlobalOrders}</div>
+            <div className="font-heading text-2xl font-semibold">{totalGlobalOrders}</div>
           </CardContent>
         </Card>
         <Card>
@@ -153,7 +153,7 @@ export default async function AdminDashboard() {
             <Cpu className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalGlobalTokens.toLocaleString()}</div>
+            <div className="font-heading text-2xl font-semibold">{totalGlobalTokens.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -162,14 +162,14 @@ export default async function AdminDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-indigo-600">${totalGlobalAiCost.toFixed(4)}</div>
+            <div className="font-heading text-2xl font-semibold text-indigo-600">${totalGlobalAiCost.toFixed(4)}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* User Accounts Table */}
-      <Card className="shadow-sm border-slate-200">
-        <CardHeader className="border-b bg-slate-50/50 py-4">
+      <Card className="shadow-sm border-border">
+        <CardHeader className="border-b bg-muted/30 py-4">
           <CardTitle>User Accounts & Billing</CardTitle>
           <CardDescription>
             All registered user profiles in Supabase with their order count and AI token usage.
@@ -177,7 +177,7 @@ export default async function AdminDashboard() {
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader className="bg-slate-50">
+            <TableHeader className="bg-muted/50">
               <TableRow>
                 <TableHead className="font-semibold">User Email</TableHead>
                 <TableHead className="font-semibold">Role</TableHead>
@@ -191,24 +191,24 @@ export default async function AdminDashboard() {
             <TableBody>
               {userStats.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-slate-500 py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     No users found.
                   </TableCell>
                 </TableRow>
               ) : (
                 userStats.map((u) => (
-                  <TableRow key={u.id} className="hover:bg-slate-50/80">
-                    <TableCell className="font-medium text-slate-900">{u.email}</TableCell>
+                  <TableRow key={u.id} className="hover:bg-muted/50">
+                    <TableCell className="font-medium text-foreground">{u.email}</TableCell>
                     <TableCell>
                       <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className="capitalize">
                         {u.role}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-slate-500 text-sm">
+                    <TableCell className="text-muted-foreground text-sm">
                       {new Date(u.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="font-medium">{u.orderCount}</TableCell>
-                    <TableCell className="text-slate-600 font-mono text-sm">
+                    <TableCell className="text-muted-foreground font-mono text-sm">
                       {u.tokensUsed.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-medium text-indigo-600 font-mono">
@@ -216,7 +216,7 @@ export default async function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-right">
                       {u.id === user.id ? (
-                        <span className="text-sm text-slate-500">Current account</span>
+                        <span className="text-sm text-muted-foreground">Current account</span>
                       ) : (
                         <AdminUserActions userId={u.id} email={u.email} role={u.role === 'admin' ? 'admin' : 'user'} />
                       )}

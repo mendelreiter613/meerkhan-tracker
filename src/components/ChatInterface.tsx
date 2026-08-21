@@ -111,7 +111,7 @@ export function ChatInterface() {
         <ScrollArea className="h-[450px] p-4" ref={scrollRef}>
           <div className="flex flex-col gap-4">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 mt-10">
+              <div className="text-center text-muted-foreground mt-10">
                 Hi! Tell me what you ordered, or if you got a refund.
               </div>
             )}
@@ -182,7 +182,7 @@ export function ChatInterface() {
         {files && files.length > 0 && (
           <div className="flex items-center gap-2 mb-2 w-full">
             {Array.from(files).map((file, i) => (
-              <div key={i} className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full text-xs text-slate-700">
+              <div key={i} className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full text-xs text-foreground">
                 <span className="truncate max-w-[150px]">{file.name}</span>
                 <button 
                   onClick={() => {
@@ -215,7 +215,7 @@ export function ChatInterface() {
             variant="outline" 
             size="icon" 
             onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 text-slate-500"
+            className="shrink-0 text-muted-foreground"
           >
             <Paperclip className="h-4 w-4" />
           </Button>
