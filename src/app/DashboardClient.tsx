@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Agent, Order, OrderStatus } from '@/types/database'
-import { addAgent, addOrder, updateOrderStatus, logout } from './actions'
+import { Agent, Order } from '@/types/database'
+import { addAgent, addOrder, updateOrderStatus, updateOrderRefund, logout } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,10 +52,19 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrderForTimeline, setSelectedOrderForTimeline] = useState<Order | null>(null)
+  const [selectedOrderForRefund, setSelectedOrderForRefund] = useState<Order | null>(null)
 
   const handleStatusChange = async (orderId: string, newStatus: string | null) => {
     if (!newStatus) return;
     await updateOrderStatus(orderId, newStatus)
+  }
+
+  const handleRecordRefund = async (formData: FormData) => {
+    if (!selectedOrderForRefund) return
+    const amount = parseFloat(formData.get('amount_refunded') as string)
+    if (!Number.isFinite(amount) || amount < 0) return
+    await updateOrderRefund(selectedOrderForRefund.id, amount)
+    setSelectedOrderForRefund(null)
   }
 
   // Filtered orders list
@@ -343,14 +352,26 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
                               </Select>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-slate-700"
-                                onClick={() => setSelectedOrderForTimeline(order)}
-                              >
-                                <History className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-slate-400 hover:text-green-700"
+                                  title="Record refund"
+                                  onClick={() => setSelectedOrderForRefund(order)}
+                                >
+                                  <DollarSign className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-slate-400 hover:text-slate-700"
+                                  title="View history"
+                                  onClick={() => setSelectedOrderForTimeline(order)}
+                                >
+                                  <History className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -394,6 +415,42 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
                     </div>
                   )}
                 </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Record Refund Dialog */}
+            <Dialog open={!!selectedOrderForRefund} onOpenChange={(open) => !open && setSelectedOrderForRefund(null)}>
+              <DialogContent className="sm:max-w-[400px]" key={selectedOrderForRefund?.id}>
+                <DialogHeader>
+                  <DialogTitle>Record Refund</DialogTitle>
+                  <DialogDescription>
+                    {selectedOrderForRefund?.item_name} — enter the amount you actually received. This marks the order as Refunded.
+                  </DialogDescription>
+                </DialogHeader>
+                <form action={handleRecordRefund}>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="amount_refunded">Amount Refunded ($)</Label>
+                      <Input
+                        id="amount_refunded"
+                        name="amount_refunded"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={
+                          selectedOrderForRefund?.amount_refunded ||
+                          selectedOrderForRefund?.amount_spent ||
+                          undefined
+                        }
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" className="w-full sm:w-auto">Save Refund</Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
             </Dialog>
           </TabsContent>
@@ -441,7 +498,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
                   <div className="flex flex-col items-center justify-center py-16 text-slate-500">
                     <Users className="h-12 w-12 text-slate-300 mb-4" />
                     <p className="text-lg font-medium text-slate-900">No agents added</p>
-                    <p className="text-sm">Click "Add Agent" to build your contact list.</p>
+                    <p className="text-sm">Click &ldquo;Add Agent&rdquo; to build your contact list.</p>
                   </div>
                 ) : (
                   <Table>

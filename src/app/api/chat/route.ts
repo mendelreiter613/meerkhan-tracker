@@ -6,6 +6,8 @@ import { createClient } from '@/utils/supabase/server'
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30
 
+const DAILY_AI_COST_CAP_USD = Number(process.env.AI_DAILY_COST_CAP_USD || '1')
+
 export async function POST(req: Request) {
   const { messages } = await req.json()
   const supabase = await createClient()
@@ -16,6 +18,23 @@ export async function POST(req: Request) {
   }
 
   const userId = user.id
+
+  // Basic per-user daily spend guardrail so the chat can't run up an unbounded API bill.
+  const startOfDay = new Date()
+  startOfDay.setHours(0, 0, 0, 0)
+  const { data: todayUsage } = await supabase
+    .from('ai_usage')
+    .select('estimated_cost')
+    .eq('user_id', userId)
+    .gte('created_at', startOfDay.toISOString())
+
+  const spentToday = (todayUsage || []).reduce((sum, u) => sum + Number(u.estimated_cost || 0), 0)
+  if (spentToday >= DAILY_AI_COST_CAP_USD) {
+    return new Response(
+      JSON.stringify({ error: `Daily AI usage cap of $${DAILY_AI_COST_CAP_USD.toFixed(2)} reached. Try again tomorrow.` }),
+      { status: 429, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 
   const systemPrompt = `You are Meerkhan, an AI assistant for managing Amazon orders, reviews, and refunds.
 You help the user track what they bought, when they submitted a review, when it went live, and when they got refunded.
@@ -72,10 +91,12 @@ Always be concise, helpful, and friendly.`
         parameters: z.object({
           orderId: z.string(),
           status: z.enum(['ordered', 'review_submitted', 'review_live', 'refund_requested', 'refunded']).optional(),
-          amountRefunded: z.number().optional()
+          amountRefunded: z.number().nonnegative().optional()
         }),
         execute: async ({ orderId, status, amountRefunded }) => {
-          const updates: any = { updated_at: new Date().toISOString() }
+          const updates: { updated_at: string; status?: typeof status; amount_refunded?: number } = {
+            updated_at: new Date().toISOString(),
+          }
           if (status) updates.status = status
           if (amountRefunded !== undefined) updates.amount_refunded = amountRefunded
           
@@ -109,7 +130,7 @@ Always be concise, helpful, and friendly.`
           itemNameSnippet: z.string().optional().describe('Optional product keyword if mentioned')
         }),
         execute: async ({ refundAmount, itemNameSnippet }) => {
-          let query = supabase
+          const query = supabase
             .from('orders')
             .select('id, item_name, order_number, amount_spent, amount_refunded, status, created_at, agents(name)')
             .eq('user_id', userId)
@@ -120,7 +141,7 @@ Always be concise, helpful, and friendly.`
           if (!data || data.length === 0) return { matches: [], message: 'No pending non-refunded orders found.' }
 
           // Score and rank candidate orders
-          const ranked = data.map((order: any) => {
+          const ranked = data.map((order) => {
             const spent = Number(order.amount_spent || 0)
             const diff = Math.abs(spent - refundAmount)
             let score = 100 - diff * 5 // higher score for closer amount match
@@ -134,14 +155,14 @@ Always be concise, helpful, and friendly.`
               itemName: order.item_name,
               orderNumber: order.order_number,
               amountSpent: spent,
-              agentName: order.agents?.name || 'No Agent',
+              agentName: order.agents?.[0]?.name || 'No Agent',
               currentStatus: order.status,
               amountDifference: diff,
               matchScore: Math.max(0, Math.round(score))
             }
           })
 
-          ranked.sort((a: any, b: any) => b.matchScore - a.matchScore)
+          ranked.sort((a, b) => b.matchScore - a.matchScore)
 
           return { matches: ranked.slice(0, 3) }
         }
@@ -157,7 +178,7 @@ Always be concise, helpful, and friendly.`
       addAgent: tool({
         description: 'Create a new agent/seller.',
         parameters: z.object({
-          name: z.string(),
+          name: z.string().min(1),
           contactInfo: z.string().optional()
         }),
         execute: async ({ name, contactInfo }) => {
@@ -169,8 +190,8 @@ Always be concise, helpful, and friendly.`
       addOrder: tool({
         description: 'Add a new order.',
         parameters: z.object({
-          itemName: z.string(),
-          amountSpent: z.number(),
+          itemName: z.string().min(1),
+          amountSpent: z.number().nonnegative(),
           orderNumber: z.string().optional(),
           agentId: z.string().optional()
         }),
@@ -200,9 +221,10 @@ Always be concise, helpful, and friendly.`
   })
 
   return result.toDataStreamResponse()
-  } catch (error: any) {
+  } catch (error) {
     console.error('Chat API Error:', error)
-    return new Response(JSON.stringify({ error: error?.message || 'Internal Server Error' }), { 
+    const message = error instanceof Error ? error.message : 'Internal Server Error'
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     })

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Users, DollarSign, Cpu, Package, ArrowLeft } from 'lucide-react'
 import { AdminUserActions } from './AdminUserActions'
+import { bootstrapAdmin } from './actions'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -28,12 +29,35 @@ export default async function AdminDashboard() {
     .single()
 
   if (profile?.role !== 'admin') {
+    // Check whether any admin exists yet. If not, let this user claim the
+    // role as a one-time bootstrap step instead of requiring a manual DB edit.
+    const bootstrapCheckClient = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { count: adminCount } = await bootstrapCheckClient
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'admin')
+    const noAdminsYet = (adminCount || 0) === 0
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
-        <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-        <p className="mb-4">You do not have permission to view the admin dashboard.</p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center gap-4">
+        <h1 className="text-2xl font-bold">Access Denied</h1>
+        {noAdminsYet ? (
+          <>
+            <p className="max-w-md text-slate-600">
+              No admin account exists yet. Claim the admin role for your account to set up the admin panel.
+            </p>
+            <form action={async () => { await bootstrapAdmin() }}>
+              <Button type="submit">Become Admin</Button>
+            </form>
+          </>
+        ) : (
+          <p>You do not have permission to view the admin dashboard.</p>
+        )}
         <Link href="/">
-          <Button>Back to Dashboard</Button>
+          <Button variant="outline">Back to Dashboard</Button>
         </Link>
       </div>
     )
@@ -194,7 +218,7 @@ export default async function AdminDashboard() {
                       {u.id === user.id ? (
                         <span className="text-sm text-slate-500">Current account</span>
                       ) : (
-                        <AdminUserActions userId={u.id} email={u.email} />
+                        <AdminUserActions userId={u.id} email={u.email} role={u.role === 'admin' ? 'admin' : 'user'} />
                       )}
                     </TableCell>
                   </TableRow>
