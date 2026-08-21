@@ -5,25 +5,37 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Send } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { Send, Paperclip, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export function ChatInterface() {
   const router = useRouter()
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     onFinish: () => {
-      // Refresh the page data when the AI finishes a response, in case tools updated the DB
       router.refresh()
     }
   })
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [files, setFiles] = useState<FileList | null>(null)
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    handleSubmit(e, {
+      experimental_attachments: files || undefined
+    })
+    setFiles(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   return (
     <Card className="w-full h-[600px] flex flex-col">
@@ -49,6 +61,24 @@ export function ChatInterface() {
                 }`}
               >
                 {m.content}
+                
+                {/* Render any attachments the user sent */}
+                {m.experimental_attachments?.map((attachment, index) => (
+                  <div key={index} className="mt-2 flex gap-2 overflow-x-auto">
+                    {attachment.contentType?.startsWith('image/') ? (
+                      <img 
+                        src={attachment.url} 
+                        alt="attachment" 
+                        className="h-24 w-auto rounded border shadow-sm"
+                      />
+                    ) : (
+                      <div className="text-xs italic bg-white/20 p-2 rounded">
+                        Attached file
+                      </div>
+                    )}
+                  </div>
+                ))}
+
                 {m.toolInvocations?.map((tool) => (
                   <div key={tool.toolCallId} className="text-xs bg-black/10 dark:bg-white/10 rounded p-1 mt-1 font-mono">
                     {tool.state === 'result' ? (
@@ -66,16 +96,55 @@ export function ChatInterface() {
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="p-4 border-t">
-        <form onSubmit={handleSubmit} className="flex w-full items-center space-x-2">
+      <CardFooter className="p-4 border-t flex flex-col items-start gap-2">
+        {files && files.length > 0 && (
+          <div className="flex items-center gap-2 mb-2 w-full">
+            {Array.from(files).map((file, i) => (
+              <div key={i} className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full text-xs text-slate-700">
+                <span className="truncate max-w-[150px]">{file.name}</span>
+                <button 
+                  onClick={() => {
+                    setFiles(null)
+                    if (fileInputRef.current) fileInputRef.current.value = ''
+                  }} 
+                  className="hover:text-red-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={onSubmit} className="flex w-full items-center space-x-2">
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            className="hidden" 
+            accept="image/*"
+            multiple={false}
+            onChange={(e) => {
+              if (e.target.files) {
+                setFiles(e.target.files)
+              }
+            }}
+          />
+          <Button 
+            type="button" 
+            variant="outline" 
+            size="icon" 
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 text-slate-500"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
           <Input
             value={input}
             onChange={handleInputChange}
-            placeholder="Type your message..."
+            placeholder="Type your message or attach an image..."
             className="flex-1"
             disabled={isLoading}
           />
-          <Button type="submit" size="icon" disabled={isLoading}>
+          <Button type="submit" size="icon" disabled={isLoading || (!input && (!files || files.length === 0))}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
