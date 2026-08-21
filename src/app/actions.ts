@@ -121,6 +121,22 @@ export async function updateOrderRefund(orderId: string, amount: number) {
   return { success: true }
 }
 
+const VALID_REMINDER_FREQUENCIES = [0, 1, 3, 7]
+
+export async function updateReminderFrequency(frequencyDays: number) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return { error: 'Not authenticated' }
+  if (!VALID_REMINDER_FREQUENCIES.includes(frequencyDays)) return { error: 'Invalid reminder frequency' }
+
+  const { error } = await supabase.rpc('update_reminder_frequency', { p_frequency_days: frequencyDays })
+  if (error) return { error: error.message }
+
+  revalidatePath('/')
+  return { success: true }
+}
+
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()

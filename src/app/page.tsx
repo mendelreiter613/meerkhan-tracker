@@ -56,16 +56,17 @@ export default async function Home() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, reminder_frequency_days')
     .eq('id', user.id)
     .single()
 
   return (
-    <DashboardClient 
-      orders={orders} 
-      agents={agents} 
-      userEmail={user.email || ''} 
+    <DashboardClient
+      orders={orders}
+      agents={agents}
+      userEmail={user.email || ''}
       isAdmin={profile?.role === 'admin'}
+      reminderFrequencyDays={profile?.reminder_frequency_days ?? 1}
     />
   )
 }

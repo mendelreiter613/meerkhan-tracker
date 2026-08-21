@@ -38,5 +38,7 @@ export interface Profile {
   id: string;
   email: string;
   role: 'admin' | 'user';
+  reminder_frequency_days: number;
+  last_reminder_sent_at: string | null;
   created_at: string;
 }

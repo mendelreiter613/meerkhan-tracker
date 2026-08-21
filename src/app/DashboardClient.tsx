@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Agent, Order } from '@/types/database'
-import { addAgent, addOrder, updateOrderStatus, updateOrderRefund, logout } from './actions'
+import { getOrderReminder } from '@/lib/reminders'
+import { addAgent, addOrder, updateOrderStatus, updateOrderRefund, updateReminderFrequency, logout } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,7 +28,9 @@ import {
   Search,
   Download,
   History,
-  Clock
+  Clock,
+  AlertTriangle,
+  Bell
 } from 'lucide-react'
 
 interface DashboardClientProps {
@@ -35,7 +38,15 @@ interface DashboardClientProps {
   agents: Agent[]
   userEmail: string
   isAdmin?: boolean
+  reminderFrequencyDays: number
 }
+
+const REMINDER_FREQUENCY_OPTIONS: { value: string, label: string }[] = [
+  { value: '0', label: 'Reminders off' },
+  { value: '1', label: 'Remind me daily' },
+  { value: '3', label: 'Remind me every 3 days' },
+  { value: '7', label: 'Remind me weekly' },
+]
 
 // 1. Added a configuration object for dynamic styling of the status dropdowns
 const statusConfig: Record<string, { label: string, colorClass: string }> = {
@@ -46,13 +57,20 @@ const statusConfig: Record<string, { label: string, colorClass: string }> = {
   refunded: { label: 'Refunded', colorClass: 'bg-green-50 text-green-700 ring-green-600/20' },
 }
 
-export default function DashboardClient({ orders, agents, userEmail, isAdmin }: DashboardClientProps) {
+export default function DashboardClient({ orders, agents, userEmail, isAdmin, reminderFrequencyDays }: DashboardClientProps) {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrderForTimeline, setSelectedOrderForTimeline] = useState<Order | null>(null)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState<Order | null>(null)
+  const [reminderFrequency, setReminderFrequency] = useState(String(reminderFrequencyDays))
+
+  const handleReminderFrequencyChange = async (value: string | null) => {
+    if (!value) return
+    setReminderFrequency(value)
+    await updateReminderFrequency(Number(value))
+  }
 
   const handleStatusChange = async (orderId: string, newStatus: string | null) => {
     if (!newStatus) return;
@@ -77,6 +95,8 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
     let matchesStatus = true
     if (statusFilter === 'pending_refund') {
       matchesStatus = (order.amount_spent || 0) > (order.amount_refunded || 0)
+    } else if (statusFilter === 'needs_attention') {
+      matchesStatus = getOrderReminder(order) !== null
     } else if (statusFilter !== 'all') {
       matchesStatus = order.status === statusFilter
     }
@@ -128,6 +148,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
   const totalSpent = orders.reduce((acc, order) => acc + (order.amount_spent || 0), 0)
   const totalRefunded = orders.reduce((acc, order) => acc + (order.amount_refunded || 0), 0)
   const pendingRefunds = totalSpent - totalRefunded
+  const attentionCount = orders.filter((order) => getOrderReminder(order) !== null).length
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50/50">
@@ -142,6 +163,19 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
         
         <div className="flex items-center gap-4">
           <span className="text-sm font-medium text-slate-500 hidden sm:inline-block">{userEmail}</span>
+          <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange}>
+            <SelectTrigger className="w-[190px] h-9 text-xs bg-white gap-1.5">
+              <Bell className="h-3.5 w-3.5 text-slate-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REMINDER_FREQUENCY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {isAdmin && (
             <Button variant="outline" size="sm" render={<Link href="/admin" />} className="gap-2">
               <ShieldAlert className="h-4 w-4" />
@@ -160,7 +194,19 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
 
       <main className="flex-1 p-6 space-y-8 max-w-7xl mx-auto w-full">
         {/* KPI Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Card
+            className={attentionCount > 0 ? 'cursor-pointer border-amber-200 bg-amber-50/50 hover:bg-amber-50' : undefined}
+            onClick={() => attentionCount > 0 && setStatusFilter('needs_attention')}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Needs Attention</CardTitle>
+              <AlertTriangle className={`h-4 w-4 ${attentionCount > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${attentionCount > 0 ? 'text-amber-600' : ''}`}>{attentionCount}</div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -237,6 +283,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="needs_attention">Needs Attention</SelectItem>
                       <SelectItem value="pending_refund">Pending Refund</SelectItem>
                       <SelectItem value="ordered">Ordered</SelectItem>
                       <SelectItem value="review_submitted">Review Submitted</SelectItem>
@@ -327,9 +374,19 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin }: 
                     <TableBody>
                       {filteredOrders.map((order) => {
                         const currentStatus = statusConfig[order.status] || { label: order.status, colorClass: 'bg-slate-100 text-slate-800' };
+                        const reminder = getOrderReminder(order)
                         return (
                           <TableRow key={order.id} className="hover:bg-slate-50/80">
-                            <TableCell className="font-medium">{order.item_name}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1.5">
+                                {reminder && (
+                                  <span title={reminder.message}>
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                                  </span>
+                                )}
+                                {order.item_name}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-slate-600">{order.agents?.name || '-'}</TableCell>
                             <TableCell className="text-slate-600 text-xs font-mono">{order.order_number || '-'}</TableCell>
                             <TableCell className="font-medium">${order.amount_spent?.toFixed(2) || '0.00'}</TableCell>
