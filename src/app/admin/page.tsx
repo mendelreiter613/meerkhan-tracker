@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Users, DollarSign, Cpu, Package, ArrowLeft } from 'lucide-react'
+import { Users, DollarSign, Cpu, Package, ArrowLeft, Receipt } from 'lucide-react'
 import { AdminUserActions } from './AdminUserActions'
 import { bootstrapAdmin } from './actions'
 
@@ -84,6 +84,14 @@ export default async function AdminDashboard() {
   const { data: aiUsage } = await adminSupabase
     .from('ai_usage')
     .select('user_id, tokens_used, estimated_cost')
+
+  // Fetch all generated monthly invoices
+  const { data: invoices } = await adminSupabase
+    .from('invoices')
+    .select('*')
+    .order('period_start', { ascending: false })
+
+  const emailById = new Map((profiles || []).map((p) => [p.id, p.email]))
 
   // Aggregate metrics per user
   const userStats = (profiles || []).map((p) => {
@@ -220,6 +228,64 @@ export default async function AdminDashboard() {
                       ) : (
                         <AdminUserActions userId={u.id} email={u.email} role={u.role === 'admin' ? 'admin' : 'user'} />
                       )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Invoice History */}
+      <Card className="shadow-sm border-border">
+        <CardHeader className="border-b bg-muted/30 py-4">
+          <CardTitle className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-muted-foreground" /> Invoice History
+          </CardTitle>
+          <CardDescription>
+            Monthly account statements generated automatically on the 1st of each month.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                <TableHead className="font-semibold">Period</TableHead>
+                <TableHead className="font-semibold">User Email</TableHead>
+                <TableHead className="font-semibold">Orders</TableHead>
+                <TableHead className="font-semibold">Spent</TableHead>
+                <TableHead className="font-semibold">Refunded</TableHead>
+                <TableHead className="font-semibold">Tokens Used</TableHead>
+                <TableHead className="font-semibold text-right">AI Cost ($)</TableHead>
+                <TableHead className="font-semibold text-right">Generated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(invoices || []).length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    No invoices generated yet. The first run happens on the 1st of next month.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                (invoices || []).map((inv) => (
+                  <TableRow key={inv.id} className="hover:bg-muted/50">
+                    <TableCell className="font-medium text-foreground">
+                      {new Date(inv.period_start).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+                    </TableCell>
+                    <TableCell className="text-foreground">{emailById.get(inv.user_id) || 'Unknown user'}</TableCell>
+                    <TableCell className="font-medium">{inv.order_count}</TableCell>
+                    <TableCell className="font-medium">${Number(inv.amount_spent).toFixed(2)}</TableCell>
+                    <TableCell className="text-green-600 font-medium">${Number(inv.amount_refunded).toFixed(2)}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">
+                      {Number(inv.ai_tokens_used).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-indigo-600 font-mono">
+                      ${Number(inv.ai_cost).toFixed(4)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground text-sm">
+                      {new Date(inv.created_at).toLocaleDateString()}
                     </TableCell>
                   </TableRow>
                 ))
