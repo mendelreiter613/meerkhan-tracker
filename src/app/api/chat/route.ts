@@ -32,6 +32,7 @@ Always be concise, helpful, and friendly.`
       model: google('gemini-3.6-flash'),
       system: systemPrompt,
       messages: convertToCoreMessages(messages),
+      maxSteps: 5,
       onFinish: async (event) => {
       // Calculate token usage and cost
       const promptTokens = event.usage?.promptTokens || 0

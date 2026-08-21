@@ -26,10 +26,32 @@ export function ChatInterface() {
     }
   }, [messages])
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    
+    let attachments: { name: string; contentType: string; url: string }[] | undefined = undefined
+
+    if (files && files.length > 0) {
+      attachments = await Promise.all(
+        Array.from(files).map(async (file) => ({
+          name: file.name,
+          contentType: file.type,
+          url: await fileToDataUrl(file),
+        }))
+      )
+    }
+
     handleSubmit(e, {
-      experimental_attachments: files || undefined
+      experimental_attachments: attachments,
     })
     setFiles(null)
     if (fileInputRef.current) {
