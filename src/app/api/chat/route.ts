@@ -29,7 +29,7 @@ Always be concise, helpful, and friendly.`
 
   try {
     const result = await streamText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-3.6-flash'),
       system: systemPrompt,
       messages: convertToCoreMessages(messages),
       onFinish: async (event) => {
@@ -120,8 +120,11 @@ Always be concise, helpful, and friendly.`
   })
 
   return result.toDataStreamResponse()
-  } catch (error) {
-    console.error(error)
-    return new Response('Internal Server Error', { status: 500 })
+  } catch (error: any) {
+    console.error('Chat API Error:', error)
+    return new Response(JSON.stringify({ error: error?.message || 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
