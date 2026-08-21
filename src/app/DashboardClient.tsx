@@ -477,7 +477,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
 
             {/* Record Refund Dialog */}
             <Dialog open={!!selectedOrderForRefund} onOpenChange={(open) => !open && setSelectedOrderForRefund(null)}>
-              <DialogContent className="sm:max-w-[400px]" key={selectedOrderForRefund?.id}>
+              <DialogContent className="sm:max-w-[400px]">
                 <DialogHeader>
                   <DialogTitle>Record Refund</DialogTitle>
                   <DialogDescription>
@@ -489,6 +489,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                     <div className="grid gap-2">
                       <Label htmlFor="amount_refunded">Amount Refunded ($)</Label>
                       <Input
+                        key={selectedOrderForRefund?.id}
                         id="amount_refunded"
                         name="amount_refunded"
                         type="number"
