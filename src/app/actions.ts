@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 export async function addAgent(formData: FormData) {
   const supabase = await createClient()
@@ -111,5 +112,6 @@ export async function updateOrderRefund(orderId: string, amount: number) {
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  revalidatePath('/')
+  revalidatePath('/', 'layout')
+  redirect('/login')
 }
