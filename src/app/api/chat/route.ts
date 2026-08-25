@@ -199,6 +199,50 @@ Always be concise, helpful, and friendly.`
 
           return { success: true, order: data?.[0] }
         }
+      }),
+      deleteOrder: tool({
+        description: 'Delete an existing order.',
+        inputSchema: z.object({
+          orderId: z.string().describe('The ID of the order to delete')
+        }),
+        execute: async ({ orderId }) => {
+          const { error } = await supabase
+            .from('orders')
+            .delete()
+            .eq('id', orderId)
+            .eq('user_id', userId)
+          if (error) return { error: error.message }
+          return { success: true, message: 'Order successfully deleted.' }
+        }
+      }),
+      editOrder: tool({
+        description: 'Edit details of an existing order (name, order number, amount spent, agent). Use updateOrder for status/refund changes.',
+        inputSchema: z.object({
+          orderId: z.string().describe('The ID of the order to edit'),
+          itemName: z.string().optional(),
+          orderNumber: z.string().optional(),
+          amountSpent: z.number().nonnegative().optional(),
+          agentId: z.string().optional()
+        }),
+        execute: async ({ orderId, itemName, orderNumber, amountSpent, agentId }) => {
+          const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+          if (itemName !== undefined) updates.item_name = itemName
+          if (orderNumber !== undefined) updates.order_number = orderNumber
+          if (amountSpent !== undefined) updates.amount_spent = amountSpent
+          if (agentId !== undefined) updates.agent_id = agentId
+
+          const { data, error } = await supabase.from('orders').update(updates).eq('id', orderId).eq('user_id', userId).select()
+          if (error) return { error: error.message }
+          
+          await supabase.from('order_events').insert({
+            order_id: orderId,
+            user_id: userId,
+            event_type: 'edited',
+            description: `AI edited order details`
+          })
+
+          return { success: true, updatedOrder: data?.[0] }
+        }
       })
     }
 
