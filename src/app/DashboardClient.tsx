@@ -2,15 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Agent, Order } from '@/types/database'
-import { getOrderReminder } from '@/lib/reminders'
-import { addAgent, addOrder, updateOrderStatus, updateOrderRefund, updateReminderFrequency, logout } from './actions'
+import { Agent, Order, OrderStatus } from '@/types/database'
+import { addAgent, addOrder, updateOrderStatus, logout, editOrder, deleteOrder } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ChatInterface } from '@/components/ChatInterface'
@@ -29,8 +29,9 @@ import {
   Download,
   History,
   Clock,
-  AlertTriangle,
-  Bell
+  MoreHorizontal,
+  Edit2,
+  Trash2
 } from 'lucide-react'
 
 interface DashboardClientProps {
@@ -38,15 +39,8 @@ interface DashboardClientProps {
   agents: Agent[]
   userEmail: string
   isAdmin?: boolean
-  reminderFrequencyDays: number
+  reminderFrequencyDays?: number
 }
-
-const REMINDER_FREQUENCY_OPTIONS: { value: string, label: string }[] = [
-  { value: '0', label: 'Reminders off' },
-  { value: '1', label: 'Remind me daily' },
-  { value: '3', label: 'Remind me every 3 days' },
-  { value: '7', label: 'Remind me weekly' },
-]
 
 // 1. Added a configuration object for dynamic styling of the status dropdowns
 const statusConfig: Record<string, { label: string, colorClass: string }> = {
@@ -63,26 +57,11 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrderForTimeline, setSelectedOrderForTimeline] = useState<Order | null>(null)
-  const [selectedOrderForRefund, setSelectedOrderForRefund] = useState<Order | null>(null)
-  const [reminderFrequency, setReminderFrequency] = useState(String(reminderFrequencyDays))
-
-  const handleReminderFrequencyChange = async (value: string | null) => {
-    if (!value) return
-    setReminderFrequency(value)
-    await updateReminderFrequency(Number(value))
-  }
+  const [orderToEdit, setOrderToEdit] = useState<Order | null>(null)
 
   const handleStatusChange = async (orderId: string, newStatus: string | null) => {
     if (!newStatus) return;
     await updateOrderStatus(orderId, newStatus)
-  }
-
-  const handleRecordRefund = async (formData: FormData) => {
-    if (!selectedOrderForRefund) return
-    const amount = parseFloat(formData.get('amount_refunded') as string)
-    if (!Number.isFinite(amount) || amount < 0) return
-    await updateOrderRefund(selectedOrderForRefund.id, amount)
-    setSelectedOrderForRefund(null)
   }
 
   // Filtered orders list
@@ -95,8 +74,6 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
     let matchesStatus = true
     if (statusFilter === 'pending_refund') {
       matchesStatus = (order.amount_spent || 0) > (order.amount_refunded || 0)
-    } else if (statusFilter === 'needs_attention') {
-      matchesStatus = getOrderReminder(order) !== null
     } else if (statusFilter !== 'all') {
       matchesStatus = order.status === statusFilter
     }
@@ -148,46 +125,29 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
   const totalSpent = orders.reduce((acc, order) => acc + (order.amount_spent || 0), 0)
   const totalRefunded = orders.reduce((acc, order) => acc + (order.amount_refunded || 0), 0)
   const pendingRefunds = totalSpent - totalRefunded
-  const attentionCount = orders.filter((order) => getOrderReminder(order) !== null).length
 
   return (
-    <div className="flex flex-col min-h-screen bg-muted/30">
+    <div className="flex flex-col min-h-screen bg-slate-50/50">
       {/* Modern sticky header */}
-      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/80 px-3 sm:px-6 backdrop-blur-md">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white/80 px-6 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Package className="h-5 w-5" />
           </div>
-          <h1 className="font-heading text-lg sm:text-xl font-semibold tracking-tight text-foreground truncate">Meerkhan Tracker</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Meerkhan Tracker</h1>
         </div>
-
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{userEmail}</span>
-          <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange}>
-            <SelectTrigger
-              className="w-7 h-7 sm:w-[190px] sm:h-9 px-0 sm:px-2.5 justify-center sm:justify-between text-xs bg-card gap-1.5 rounded-[min(var(--radius-md),12px)] sm:rounded-lg"
-              chevronClassName="hidden sm:block"
-            >
-              <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SelectValue className="hidden sm:flex" />
-            </SelectTrigger>
-            <SelectContent>
-              {REMINDER_FREQUENCY_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-slate-500 hidden sm:inline-block">{userEmail}</span>
           {isAdmin && (
             <Button variant="outline" size="sm" render={<Link href="/admin" />} className="gap-2">
               <ShieldAlert className="h-4 w-4" />
               <span className="hidden sm:inline">Admin Panel</span>
             </Button>
           )}
-          <Separator orientation="vertical" className="h-6 hidden sm:block" />
+          <Separator orientation="vertical" className="h-6" />
           <form action={logout}>
-            <Button type="submit" variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+            <Button type="submit" variant="ghost" size="sm" className="gap-2 text-slate-600 hover:text-slate-900">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>
             </Button>
@@ -195,28 +155,16 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
         </div>
       </header>
 
-      <main className="flex-1 p-3 sm:p-6 space-y-6 sm:space-y-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-6 space-y-8 max-w-7xl mx-auto w-full">
         {/* KPI Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Card
-            className={attentionCount > 0 ? 'cursor-pointer border-amber-200 bg-amber-50/50 hover:bg-amber-50' : undefined}
-            onClick={() => attentionCount > 0 && setStatusFilter('needs_attention')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Needs Attention</CardTitle>
-              <AlertTriangle className={`h-4 w-4 ${attentionCount > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
-            </CardHeader>
-            <CardContent>
-              <div className={`font-heading text-2xl font-semibold ${attentionCount > 0 ? 'text-amber-600' : ''}`}>{attentionCount}</div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-heading text-2xl font-semibold">{orders.length}</div>
+              <div className="text-2xl font-bold">{orders.length}</div>
             </CardContent>
           </Card>
           <Card>
@@ -225,7 +173,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-heading text-2xl font-semibold">${totalSpent.toFixed(2)}</div>
+              <div className="text-2xl font-bold">${totalSpent.toFixed(2)}</div>
             </CardContent>
           </Card>
           <Card>
@@ -234,7 +182,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-heading text-2xl font-semibold text-green-600">${totalRefunded.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-green-600">${totalRefunded.toFixed(2)}</div>
             </CardContent>
           </Card>
           <Card>
@@ -243,14 +191,14 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="font-heading text-2xl font-semibold text-orange-600">${pendingRefunds.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-orange-600">${pendingRefunds.toFixed(2)}</div>
             </CardContent>
           </Card>
         </div>
 
         <Tabs defaultValue="orders" className="w-full">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <TabsList className="bg-card border shadow-sm">
+            <TabsList className="bg-white border shadow-sm">
               <TabsTrigger value="orders" className="gap-2"><Package className="h-4 w-4"/> Orders</TabsTrigger>
               <TabsTrigger value="agents" className="gap-2"><Users className="h-4 w-4"/> Agents</TabsTrigger>
               <TabsTrigger value="ai" className="gap-2 text-indigo-600 data-[state=active]:text-indigo-700">
@@ -260,8 +208,8 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
           </div>
 
           <TabsContent value="orders" className="m-0 focus-visible:outline-none focus-visible:ring-0">
-            <Card className="shadow-sm border-border">
-              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b bg-muted/30 py-4 gap-4">
+            <Card className="shadow-sm border-slate-200">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b bg-slate-50/50 py-4 gap-4">
                 <div>
                   <CardTitle>Order History</CardTitle>
                   <CardDescription>Manage and track all your Amazon review items.</CardDescription>
@@ -270,23 +218,22 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {/* Search Input */}
                   <div className="relative flex-1 sm:w-60">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
                       placeholder="Search orders or agents..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 h-9 text-xs bg-card"
+                      className="pl-9 h-9 text-xs bg-white"
                     />
                   </div>
 
                   {/* Status Filter */}
                   <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || 'all')}>
-                    <SelectTrigger className="w-[150px] h-9 text-xs bg-card">
+                    <SelectTrigger className="w-[150px] h-9 text-xs bg-white">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="needs_attention">Needs Attention</SelectItem>
                       <SelectItem value="pending_refund">Pending Refund</SelectItem>
                       <SelectItem value="ordered">Ordered</SelectItem>
                       <SelectItem value="review_submitted">Review Submitted</SelectItem>
@@ -297,7 +244,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                   </Select>
 
                   {/* CSV Export Button */}
-                  <Button variant="outline" size="sm" onClick={exportToCsv} className="h-9 gap-1.5 text-xs bg-card">
+                  <Button variant="outline" size="sm" onClick={exportToCsv} className="h-9 gap-1.5 text-xs bg-white">
                     <Download className="h-3.5 w-3.5" /> Export CSV
                   </Button>
 
@@ -356,14 +303,14 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               </CardHeader>
               <CardContent className="p-0">
                 {filteredOrders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                    <Inbox className="h-12 w-12 text-muted-foreground/60 mb-4" />
-                    <p className="text-lg font-medium text-foreground">No orders found</p>
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <Inbox className="h-12 w-12 text-slate-300 mb-4" />
+                    <p className="text-lg font-medium text-slate-900">No orders found</p>
                     <p className="text-sm">Try adjusting your search or filters.</p>
                   </div>
                 ) : (
                   <Table>
-                    <TableHeader className="bg-muted/50">
+                    <TableHeader className="bg-slate-50">
                       <TableRow>
                         <TableHead className="font-semibold">Item</TableHead>
                         <TableHead className="font-semibold">Agent</TableHead>
@@ -371,27 +318,17 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                         <TableHead className="font-semibold">Spent</TableHead>
                         <TableHead className="font-semibold">Refunded</TableHead>
                         <TableHead className="font-semibold">Status</TableHead>
-                        <TableHead className="font-semibold text-right">History</TableHead>
+                        <TableHead className="font-semibold text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredOrders.map((order) => {
-                        const currentStatus = statusConfig[order.status] || { label: order.status, colorClass: 'bg-muted text-foreground' };
-                        const reminder = getOrderReminder(order)
+                        const currentStatus = statusConfig[order.status] || { label: order.status, colorClass: 'bg-slate-100 text-slate-800' };
                         return (
-                          <TableRow key={order.id} className="hover:bg-muted/50">
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-1.5">
-                                {reminder && (
-                                  <span title={reminder.message}>
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                                  </span>
-                                )}
-                                {order.item_name}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">{order.agents?.name || '-'}</TableCell>
-                            <TableCell className="text-muted-foreground text-xs font-mono">{order.order_number || '-'}</TableCell>
+                          <TableRow key={order.id} className="hover:bg-slate-50/80">
+                            <TableCell className="font-medium">{order.item_name}</TableCell>
+                            <TableCell className="text-slate-600">{order.agents?.name || '-'}</TableCell>
+                            <TableCell className="text-slate-600 text-xs font-mono">{order.order_number || '-'}</TableCell>
                             <TableCell className="font-medium">${order.amount_spent?.toFixed(2) || '0.00'}</TableCell>
                             <TableCell className="text-green-600 font-medium">${order.amount_refunded?.toFixed(2) || '0.00'}</TableCell>
                             <TableCell>
@@ -412,26 +349,29 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                               </Select>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-green-700"
-                                  title="Record refund"
-                                  onClick={() => setSelectedOrderForRefund(order)}
-                                >
-                                  <DollarSign className="h-4 w-4" />
+                              <DropdownMenu>
+                                <Button render={<DropdownMenuTrigger />} variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-700">
+                                  <MoreHorizontal className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                  title="View history"
-                                  onClick={() => setSelectedOrderForTimeline(order)}
-                                >
-                                  <History className="h-4 w-4" />
-                                </Button>
-                              </div>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => setSelectedOrderForTimeline(order)} className="gap-2 cursor-pointer">
+                                    <History className="h-4 w-4" /> History
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setOrderToEdit(order)} className="gap-2 cursor-pointer">
+                                    <Edit2 className="h-4 w-4" /> Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={async () => {
+                                      if (window.confirm('Are you sure you want to delete this order?')) {
+                                        await deleteOrder(order.id)
+                                      }
+                                    }} 
+                                    className="gap-2 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground"
+                                  >
+                                    <Trash2 className="h-4 w-4" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         )
@@ -456,18 +396,18 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
 
                 <div className="py-4 space-y-4 max-h-[350px] overflow-y-auto">
                   {(!selectedOrderForTimeline?.order_events || selectedOrderForTimeline.order_events.length === 0) ? (
-                    <div className="text-center text-muted-foreground py-6 text-sm">
+                    <div className="text-center text-slate-500 py-6 text-sm">
                       No event log recorded yet. Changes will appear here automatically.
                     </div>
                   ) : (
-                    <div className="relative border-l border-border ml-4 pl-4 space-y-4">
+                    <div className="relative border-l border-slate-200 ml-4 pl-4 space-y-4">
                       {selectedOrderForTimeline.order_events
                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                         .map((evt) => (
                           <div key={evt.id} className="relative">
                             <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-indigo-600 ring-4 ring-white" />
-                            <p className="text-sm font-medium text-foreground">{evt.description}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="text-sm font-medium text-slate-900">{evt.description}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
                               {new Date(evt.created_at).toLocaleString()}
                             </p>
                           </div>
@@ -478,38 +418,53 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               </DialogContent>
             </Dialog>
 
-            {/* Record Refund Dialog */}
-            <Dialog open={!!selectedOrderForRefund} onOpenChange={(open) => !open && setSelectedOrderForRefund(null)}>
-              <DialogContent className="sm:max-w-[400px]">
+            {/* Edit Order Dialog */}
+            <Dialog open={!!orderToEdit} onOpenChange={(open) => !open && setOrderToEdit(null)}>
+              <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Record Refund</DialogTitle>
-                  <DialogDescription>
-                    {selectedOrderForRefund?.item_name} — enter the amount you actually received. This marks the order as Refunded.
-                  </DialogDescription>
+                  <DialogTitle>Edit Order</DialogTitle>
+                  <DialogDescription>Update details for this order.</DialogDescription>
                 </DialogHeader>
-                <form action={handleRecordRefund}>
+                <form action={async (formData) => {
+                  if (orderToEdit) {
+                    await editOrder(orderToEdit.id, formData)
+                    setOrderToEdit(null)
+                  }
+                }}>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="amount_refunded">Amount Refunded ($)</Label>
-                      <Input
-                        key={selectedOrderForRefund?.id}
-                        id="amount_refunded"
-                        name="amount_refunded"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={
-                          selectedOrderForRefund?.amount_refunded ||
-                          selectedOrderForRefund?.amount_spent ||
-                          undefined
-                        }
-                        placeholder="0.00"
-                        required
-                      />
+                      <Label htmlFor="edit_item_name">Item Name</Label>
+                      <Input id="edit_item_name" name="item_name" defaultValue={orderToEdit?.item_name} required />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit_order_number">Order Number</Label>
+                      <Input id="edit_order_number" name="order_number" defaultValue={orderToEdit?.order_number || ''} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit_amount_spent">Amount Spent ($)</Label>
+                        <Input id="edit_amount_spent" name="amount_spent" type="number" step="0.01" defaultValue={orderToEdit?.amount_spent || ''} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit_agent_id">Agent</Label>
+                        <Select name="agent_id" defaultValue={orderToEdit?.agent_id || 'none'}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {agents.map((agent) => (
+                              <SelectItem key={agent.id} value={agent.id}>
+                                {agent.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button type="submit" className="w-full sm:w-auto">Save Refund</Button>
+                    <Button type="submit" className="w-full sm:w-auto">Save Changes</Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -517,8 +472,8 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
           </TabsContent>
 
           <TabsContent value="agents" className="m-0 focus-visible:outline-none focus-visible:ring-0">
-            <Card className="shadow-sm border-border">
-              <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30 py-4">
+            <Card className="shadow-sm border-slate-200">
+              <CardHeader className="flex flex-row items-center justify-between border-b bg-slate-50/50 py-4">
                 <div>
                   <CardTitle>Agents</CardTitle>
                   <CardDescription>Sellers and contacts who provide items for review.</CardDescription>
@@ -556,14 +511,14 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               </CardHeader>
               <CardContent className="p-0">
                 {agentPerformance.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                    <Users className="h-12 w-12 text-muted-foreground/60 mb-4" />
-                    <p className="text-lg font-medium text-foreground">No agents added</p>
-                    <p className="text-sm">Click &ldquo;Add Agent&rdquo; to build your contact list.</p>
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <Users className="h-12 w-12 text-slate-300 mb-4" />
+                    <p className="text-lg font-medium text-slate-900">No agents added</p>
+                    <p className="text-sm">Click "Add Agent" to build your contact list.</p>
                   </div>
                 ) : (
                   <Table>
-                    <TableHeader className="bg-muted/50">
+                    <TableHeader className="bg-slate-50">
                       <TableRow>
                         <TableHead className="font-semibold">Name</TableHead>
                         <TableHead className="font-semibold">Contact Info</TableHead>
@@ -575,9 +530,9 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                     </TableHeader>
                     <TableBody>
                       {agentPerformance.map((agent) => (
-                        <TableRow key={agent.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium text-foreground">{agent.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{agent.contact_info || '-'}</TableCell>
+                        <TableRow key={agent.id} className="hover:bg-slate-50/80">
+                          <TableCell className="font-medium text-slate-900">{agent.name}</TableCell>
+                          <TableCell className="text-slate-600">{agent.contact_info || '-'}</TableCell>
                           <TableCell className="font-medium">{agent.orderCount}</TableCell>
                           <TableCell className="font-medium">${agent.totalSpent.toFixed(2)}</TableCell>
                           <TableCell className="text-green-600 font-medium">${agent.totalRefunded.toFixed(2)}</TableCell>
