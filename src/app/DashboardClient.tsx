@@ -77,9 +77,16 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
     await updateReminderFrequency(Number(value))
   }
 
-  const handleStatusChange = async (orderId: string, newStatus: string | null) => {
+  const handleStatusChange = async (order: Order, newStatus: string | null) => {
     if (!newStatus) return;
-    await updateOrderStatus(orderId, newStatus)
+    // "Refunded" always needs a dollar amount, so route it through the Record
+    // Refund dialog instead of writing status-only (which would leave
+    // amount_refunded — and the Total Refunded KPI — stuck at whatever it was).
+    if (newStatus === 'refunded') {
+      setSelectedOrderForRefund(order)
+      return
+    }
+    await updateOrderStatus(order.id, newStatus)
   }
 
   const handleRecordRefund = async (formData: FormData) => {
@@ -401,8 +408,8 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                             <TableCell className="text-green-600 font-medium">${order.amount_refunded?.toFixed(2) || '0.00'}</TableCell>
                             <TableCell>
                               <Select
-                                defaultValue={order.status}
-                                onValueChange={(value) => handleStatusChange(order.id, value)}
+                                value={order.status}
+                                onValueChange={(value) => handleStatusChange(order, value)}
                               >
                                 <SelectTrigger className={`w-[150px] h-8 text-xs font-medium border-0 ring-1 ring-inset ${currentStatus.colorClass}`}>
                                   <SelectValue />
