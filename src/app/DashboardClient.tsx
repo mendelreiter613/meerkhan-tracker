@@ -52,6 +52,10 @@ const REMINDER_FREQUENCY_OPTIONS: { value: string, label: string }[] = [
   { value: '7', label: 'Remind me weekly' },
 ]
 
+const reminderItems: Record<string, string> = Object.fromEntries(
+  REMINDER_FREQUENCY_OPTIONS.map((option) => [option.value, option.label])
+)
+
 // 1. Added a configuration object for dynamic styling of the status dropdowns
 const statusConfig: Record<string, { label: string, colorClass: string }> = {
   ordered: { label: 'Ordered', colorClass: 'bg-blue-50 text-blue-700 ring-blue-600/20' },
@@ -59,6 +63,22 @@ const statusConfig: Record<string, { label: string, colorClass: string }> = {
   review_live: { label: 'Review Live', colorClass: 'bg-purple-50 text-purple-700 ring-purple-600/20' },
   refund_requested: { label: 'Refund Requested', colorClass: 'bg-orange-50 text-orange-700 ring-orange-600/20' },
   refunded: { label: 'Refunded', colorClass: 'bg-green-50 text-green-700 ring-green-600/20' },
+}
+
+// Base UI's <Select.Value> only resolves a label for the current value once the
+// popup's items have mounted at least once — before that (e.g. on initial page
+// load with a pre-set value) it falls back to showing the raw value. Passing
+// `items` to <Select> gives it a value->label map upfront so it renders
+// correctly from the start. See node_modules/@base-ui/react/select/root/SelectRoot.d.ts
+const statusItems: Record<string, string> = Object.fromEntries(
+  Object.entries(statusConfig).map(([value, config]) => [value, config.label])
+)
+
+const statusFilterItems: Record<string, string> = {
+  all: 'All Statuses',
+  needs_attention: 'Needs Attention',
+  pending_refund: 'Pending Refund',
+  ...statusItems,
 }
 
 export default function DashboardClient({ orders, agents, userEmail, isAdmin, reminderFrequencyDays }: DashboardClientProps) {
@@ -140,6 +160,8 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
     document.body.removeChild(link)
   }
 
+  const agentItems: Record<string, string> = Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
+
   // Agent Performance Calculations
   const agentPerformance = agents.map((agent) => {
     const agentOrders = orders.filter((o) => o.agent_id === agent.id)
@@ -175,7 +197,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
 
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{userEmail}</span>
-          <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange}>
+          <Select value={reminderFrequency} onValueChange={handleReminderFrequencyChange} items={reminderItems}>
             <SelectTrigger
               className="w-7 h-7 sm:w-[190px] sm:h-9 px-0 sm:px-2.5 justify-center sm:justify-between text-xs bg-card gap-1.5 rounded-[min(var(--radius-md),12px)] sm:rounded-lg"
               chevronClassName="hidden sm:block"
@@ -292,7 +314,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                   </div>
 
                   {/* Status Filter */}
-                  <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || 'all')}>
+                  <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || 'all')} items={statusFilterItems}>
                     <SelectTrigger className="w-[150px] h-9 text-xs bg-card">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
@@ -343,7 +365,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                             </div>
                             <div className="grid gap-2">
                               <Label htmlFor="agent_id">Agent</Label>
-                              <Select name="agent_id">
+                              <Select name="agent_id" items={agentItems}>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select..." />
                                 </SelectTrigger>
@@ -410,6 +432,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                               <Select
                                 value={order.status}
                                 onValueChange={(value) => handleStatusChange(order, value)}
+                                items={statusItems}
                               >
                                 <SelectTrigger className={`w-[150px] h-8 text-xs font-medium border-0 ring-1 ring-inset ${currentStatus.colorClass}`}>
                                   <SelectValue />
@@ -562,7 +585,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="edit_agent_id">Agent</Label>
-                        <Select name="agent_id" defaultValue={orderToEdit?.agent_id || 'none'}>
+                        <Select name="agent_id" defaultValue={orderToEdit?.agent_id || 'none'} items={{ none: 'None', ...agentItems }}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select..." />
                           </SelectTrigger>
