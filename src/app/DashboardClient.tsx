@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ChatInterface } from '@/components/ChatInterface'
+import { ConnectAppsDialog } from '@/components/ConnectAppsDialog'
 import { Separator } from '@/components/ui/separator'
 import {
   Package,
@@ -213,6 +214,7 @@ export default function DashboardClient({ orders, agents, userEmail, isAdmin, re
               ))}
             </SelectContent>
           </Select>
+          <ConnectAppsDialog />
           {isAdmin && (
             <Button variant="outline" size="sm" render={<Link href="/admin" />} className="gap-2">
               <ShieldAlert className="h-4 w-4" />
